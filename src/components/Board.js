@@ -1,114 +1,204 @@
-import React, { useState } from "react";
-import { DndContext, closestCorners } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import Column from "./Column";
-import { v4 as uuidv4 } from "uuid";
+// Board.js
+import React, { useState } from 'react';
+import Column from './Column';
+import './Board.css';
 
-const initialColumns = {
-  todo: { id: "todo", title: "To Do", tasks: [{ id: uuidv4(), content: "Task 1", description: "", dueDate: "" }] },
-  inProgress: { id: "inProgress", title: "In Progress", tasks: [] },
-  done: { id: "done", title: "Done", tasks: [] }
-};
+const Board = () => {
+  const [columns, setColumns] = useState({
+    todo: {
+      id: 'todo',
+      title: 'Виконати',
+      taskIds: ['task-1', 'task-2']
+    },
+    inProgress: {
+      id: 'inProgress',
+      title: 'Виконується',
+      taskIds: ['task-3']
+    },
+    inReview: {
+      id: 'review',
+      title: 'Перевіряється',
+      taskIds: ['task-5']
+    },
+    done: {
+      id: 'done',
+      title: 'Виконано',
+      taskIds: ['task-4']
+    }
+  });
 
-export default function Board() {
-  const [columns, setColumns] = useState(initialColumns);
-  const [showForm, setShowForm] = useState(false);
-  const [editTask, setEditTask] = useState(null);
-  const [taskData, setTaskData] = useState({ title: "", description: "", dueDate: "" });
+  const [tasks, setTasks] = useState({
+    'task-1': { id: 'task-1', content: 'Перевірити backlog', priority: 'high' },
+    'task-2': { id: 'task-2', content: 'Дослідження нової технології', priority: 'medium' },
+    'task-3': { id: 'task-3', content: 'Unit тести', priority: 'medium' },
+    'task-4': { id: 'task-4', content: 'Впровадження нової feature', priority: 'low' }, 
+    'task-5': { id: 'task-5', content: 'Впровадження нової feature 2', priority: 'high' }
 
-  const handleDragEnd = (event) => {
-    const { active, over } = event;
-    if (!over) return;
+  });
+
+  const [newTaskText, setNewTaskText] = useState('');
+  const [addingToColumn, setAddingToColumn] = useState(null);
+
+  // Handle dragging tasks between columns
+  const handleDragStart = (e, taskId, sourceColumnId) => {
+    e.dataTransfer.setData('taskId', taskId);
+    e.dataTransfer.setData('sourceColumnId', sourceColumnId);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e, targetColumnId) => {
+    const taskId = e.dataTransfer.getData('taskId');
+    const sourceColumnId = e.dataTransfer.getData('sourceColumnId');
+
+    // Don't do anything if dropped in same column
+    if (sourceColumnId === targetColumnId) return;
+
+    // Create updated columns
+    const newColumns = { ...columns };
     
-    const sourceColumn = Object.values(columns).find(col => col.tasks.some(task => task.id === active.id));
-    const destinationColumn = columns[over.id];
+    // Remove from source column
+    newColumns[sourceColumnId].taskIds = newColumns[sourceColumnId].taskIds.filter(id => id !== taskId);
     
-    if (!sourceColumn || !destinationColumn || sourceColumn.id === destinationColumn.id) return;
+    // Add to target column
+    newColumns[targetColumnId].taskIds = [...newColumns[targetColumnId].taskIds, taskId];
     
-    const task = sourceColumn.tasks.find(task => task.id === active.id);
-    
-    setColumns(prev => {
-      const newSourceTasks = sourceColumn.tasks.filter(task => task.id !== active.id);
-      const newDestinationTasks = destinationColumn.tasks.some(t => t.id === active.id)
-        ? destinationColumn.tasks
-        : [...destinationColumn.tasks, task];
-      
-      return {
-        ...prev,
-        [sourceColumn.id]: { ...sourceColumn, tasks: newSourceTasks },
-        [destinationColumn.id]: { ...destinationColumn, tasks: newDestinationTasks }
-      };
+    setColumns(newColumns);
+  };
+
+  // Adding new tasks
+  const handleAddTaskClick = (columnId) => {
+    setAddingToColumn(columnId);
+    setNewTaskText('');
+  };
+
+  const handleNewTaskChange = (e) => {
+    setNewTaskText(e.target.value);
+  };
+
+  const handleNewTaskSubmit = () => {
+    if (newTaskText.trim() === '') return;
+
+    // Create new task
+    const newTaskId = `task-${Date.now()}`;
+    const newTask = {
+      id: newTaskId,
+      content: newTaskText,
+      priority: 'medium'
+    };
+
+    // Add to tasks
+    setTasks({
+      ...tasks,
+      [newTaskId]: newTask
     });
+
+    // Add to column
+    const newColumns = { ...columns };
+    newColumns[addingToColumn].taskIds = [...newColumns[addingToColumn].taskIds, newTaskId];
+    setColumns(newColumns);
+
+    // Reset form
+    setAddingToColumn(null);
+    setNewTaskText('');
   };
 
-  const addTask = () => {
-    if (!taskData.title.trim()) return;
-    const task = { id: uuidv4(), content: taskData.title, description: taskData.description, dueDate: taskData.dueDate };
-    
-    setColumns(prev => ({
-      ...prev,
-      todo: { ...prev.todo, tasks: [...prev.todo.tasks, task] }
-    }));
-    
-    setShowForm(false);
-    setTaskData({ title: "", description: "", dueDate: "" });
+  // Editing tasks
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [editTaskText, setEditTaskText] = useState('');
+
+  const handleEditTaskClick = (taskId) => {
+    setEditingTaskId(taskId);
+    setEditTaskText(tasks[taskId].content);
   };
 
-  const updateTask = () => {
-    if (!editTask) return;
-    
-    setColumns(prev => {
-      const updatedColumns = { ...prev };
-      for (let col in updatedColumns) {
-        updatedColumns[col].tasks = updatedColumns[col].tasks.map(task => 
-          task.id === editTask.id ? { ...task, ...taskData } : task
-        );
+  const handleEditTaskChange = (e) => {
+    setEditTaskText(e.target.value);
+  };
+
+  const handleEditTaskSubmit = () => {
+    if (editTaskText.trim() === '') return;
+
+    // Update task
+    setTasks({
+      ...tasks,
+      [editingTaskId]: {
+        ...tasks[editingTaskId],
+        content: editTaskText
       }
-      return updatedColumns;
     });
+
+    // Reset form
+    setEditingTaskId(null);
+    setEditTaskText('');
+  };
+
+  // Delete tasks
+  const handleDeleteTask = (taskId) => {
+    // Find which column contains this task
+    let columnId = null;
+    Object.keys(columns).forEach(colId => {
+      if (columns[colId].taskIds.includes(taskId)) {
+        columnId = colId;
+      }
+    });
+
+    if (!columnId) return;
+
+    // Remove task from column
+    const newColumns = { ...columns };
+    newColumns[columnId].taskIds = newColumns[columnId].taskIds.filter(id => id !== taskId);
     
-    setEditTask(null);
-    setTaskData({ title: "", description: "", dueDate: "" });
+    // Remove task from tasks
+    const newTasks = { ...tasks };
+    delete newTasks[taskId];
+    
+    setColumns(newColumns);
+    setTasks(newTasks);
+  };
+
+  // Update task priority
+  const handlePriorityChange = (taskId, priority) => {
+    setTasks({
+      ...tasks,
+      [taskId]: {
+        ...tasks[taskId],
+        priority
+      }
+    });
   };
 
   return (
-    <DndContext collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-      <div style={{ display: "flex", gap: "1rem" }}>
-        <div>
-          <button onClick={() => setShowForm(true)}>+ Add Task</button>
-          {(showForm || editTask) && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "1rem" }}>
-              <input
-                type="text"
-                placeholder="Title"
-                value={taskData.title}
-                onChange={(e) => setTaskData({ ...taskData, title: e.target.value })}
-              />
-              <textarea
-                placeholder="Description"
-                value={taskData.description}
-                onChange={(e) => setTaskData({ ...taskData, description: e.target.value })}
-              />
-              <input
-                type="date"
-                value={taskData.dueDate}
-                onChange={(e) => setTaskData({ ...taskData, dueDate: e.target.value })}
-              />
-              {editTask ? (
-                <button onClick={updateTask}>Update Task</button>
-              ) : (
-                <button onClick={addTask}>Add</button>
-              )}
-              <button onClick={() => { setShowForm(false); setEditTask(null); }}>Cancel</button>
-            </div>
-          )}
-        </div>
+    <div className="board">
+      <h1>Kanban дошка</h1>
+      <div className="board-columns">
         {Object.values(columns).map(column => (
-          <SortableContext key={column.id} items={column.tasks} strategy={verticalListSortingStrategy}>
-            <Column column={column} onEditTask={(task) => { setEditTask(task); setTaskData(task); }} />
-          </SortableContext>
+          <Column
+            key={column.id}
+            column={column}
+            tasks={column.taskIds.map(taskId => tasks[taskId])}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            onAddTaskClick={handleAddTaskClick}
+            onEditTaskClick={handleEditTaskClick}
+            onDeleteTask={handleDeleteTask}
+            onPriorityChange={handlePriorityChange}
+            isAddingTask={addingToColumn === column.id}
+            addTaskText={newTaskText}
+            onAddTaskChange={handleNewTaskChange}
+            onAddTaskSubmit={handleNewTaskSubmit}
+            editingTaskId={editingTaskId}
+            editTaskText={editTaskText}
+            onEditTaskChange={handleEditTaskChange}
+            onEditTaskSubmit={handleEditTaskSubmit}
+          />
         ))}
       </div>
-    </DndContext>
+    </div>
   );
-}
+};
+
+export default Board;

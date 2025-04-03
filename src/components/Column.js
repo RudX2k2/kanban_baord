@@ -1,38 +1,78 @@
 // Column.js
-import React from "react";
-import { useSortable } from "@dnd-kit/sortable";
+import React from 'react';
+import Task from './Task';
+import './Column.css';
 
-function Column({ column, onEditTask }) {
+const Column = ({
+  column,
+  tasks,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onAddTaskClick,
+  onEditTaskClick,
+  onDeleteTask,
+  onPriorityChange,
+  isAddingTask,
+  addTaskText,
+  onAddTaskChange,
+  onAddTaskSubmit,
+  editingTaskId,
+  editTaskText,
+  onEditTaskChange,
+  onEditTaskSubmit
+}) => {
   return (
-    <div style={{ width: "300px", border: "1px solid #ccc", padding: "1rem" }}>
-      <h3>{column.title}</h3>
-      {column.tasks.map((task) => {
-        const { setNodeRef, isDragging } = useSortable({
-          id: task.id,  // Використовуємо ID кожної таски для визначення, яка саме таска буде перетягуватись
-        });
-
-        // Повертаємо елемент безпосередньо
-        return (
-          <div
+    <div
+      className="column"
+      onDragOver={onDragOver}
+      onDrop={(e) => onDrop(e, column.id)}
+    >
+      <div className="column-header">
+        <h2>{column.title}</h2>
+        <div className="task-count">{tasks.length}</div>
+      </div>
+      
+      <div className="task-list">
+        {tasks.map(task => (
+          <Task
             key={task.id}
-            ref={setNodeRef} // додаємо ref для перетягування
-            style={{
-              marginBottom: "1rem",
-              padding: "1rem",
-              border: "1px solid #eee",
-              cursor: "pointer",
-              background: isDragging ? "#e0e0e0" : "#f4f4f4", // змінюємо фон, коли таска перетягується
-            }}
-            onClick={() => onEditTask(task)} // обробник кліку для редагування таски
-          >
-            <h4>{task.content}</h4>
-            <p>{task.description}</p>
-            <p>{task.dueDate}</p>
+            task={task}
+            onDragStart={(e) => onDragStart(e, task.id, column.id)}
+            onEditClick={() => onEditTaskClick(task.id)}
+            onDeleteClick={() => onDeleteTask(task.id)}
+            onPriorityChange={(priority) => onPriorityChange(task.id, priority)}
+            isEditing={editingTaskId === task.id}
+            editText={editTaskText}
+            onEditChange={onEditTaskChange}
+            onEditSubmit={onEditTaskSubmit}
+          />
+        ))}
+      </div>
+      
+      {isAddingTask ? (
+        <div className="add-task-form">
+          <textarea
+            value={addTaskText}
+            onChange={onAddTaskChange}
+            placeholder="Введіть опис завдання..."
+            autoFocus
+          />
+          <div className="form-actions">
+            <button onClick={onAddTaskSubmit}>Додати</button>
+            <button onClick={() => onAddTaskClick(null)}>Відмінити</button>
           </div>
-        );
-      })}
+        </div>
+      ) : (
+        <button 
+          className="add-task-button" 
+          onClick={() => onAddTaskClick(column.id)}
+        >
+          + Додати завдання
+        </button>
+      )}
     </div>
   );
-}
+};
 
 export default Column;
