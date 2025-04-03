@@ -1,8 +1,9 @@
-// Board.js (with fixes for tasks moving after refresh)
 import React, { useState, useEffect } from 'react';
 import Column from './Column';
 import './Board.css';
-import { db, doc, getDoc, setDoc, updateDoc } from '../firebase'; // Adjust path as needed
+import { db, doc, getDoc, setDoc, updateDoc } from '../firebase';
+
+const columnOrder = ["todo", "inProgress", "done"];
 
 const Board = () => {
   const [columns, setColumns] = useState({});
@@ -12,7 +13,7 @@ const Board = () => {
   const [addingToColumn, setAddingToColumn] = useState(null);
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [editTaskText, setEditTaskText] = useState('');
-  const [boardId] = useState('main-board'); // You can make this dynamic later
+  const [boardId] = useState('main-board');
 
   // Fetch data on load
   useEffect(() => {
@@ -21,7 +22,7 @@ const Board = () => {
         // Get board data
         const boardRef = doc(db, "boards", boardId);
         const boardDoc = await getDoc(boardRef);
-        
+
         if (boardDoc.exists()) {
           const data = boardDoc.data();
           // Make sure we have both tasks and columns
@@ -42,7 +43,7 @@ const Board = () => {
         setLoading(false);
       }
     };
-    
+
     // Helper to create default board
     const createDefaultBoard = async (boardRef) => {
       const defaultColumns = {
@@ -62,24 +63,23 @@ const Board = () => {
           taskIds: []
         }
       };
-      
+
       await setDoc(boardRef, {
         columns: defaultColumns,
         tasks: {}
       });
-      
+
       setColumns(defaultColumns);
       setTasks({});
     };
-    
+
     fetchData();
   }, [boardId]);
 
   // Save board data whenever there's a change
-  // We use a single save function to ensure consistency
   const saveBoard = async (newColumns, newTasks) => {
     if (loading) return; // Don't save during initial load
-    
+
     try {
       const boardRef = doc(db, "boards", boardId);
       await updateDoc(boardRef, {
@@ -110,13 +110,13 @@ const Board = () => {
 
     // Create updated columns
     const newColumns = { ...columns };
-    
+
     // Remove from source column
     newColumns[sourceColumnId].taskIds = newColumns[sourceColumnId].taskIds.filter(id => id !== taskId);
-    
+
     // Add to target column
     newColumns[targetColumnId].taskIds = [...newColumns[targetColumnId].taskIds, taskId];
-    
+
     // Update state and save to Firebase in one operation
     setColumns(newColumns);
     saveBoard(newColumns, tasks);
@@ -148,10 +148,10 @@ const Board = () => {
       ...tasks,
       [newTaskId]: newTask
     };
-    
+
     const newColumns = { ...columns };
     newColumns[addingToColumn].taskIds = [...newColumns[addingToColumn].taskIds, newTaskId];
-    
+
     // Update state and save to Firebase
     setTasks(newTasks);
     setColumns(newColumns);
@@ -208,10 +208,10 @@ const Board = () => {
     // Create updated copies
     const newColumns = { ...columns };
     newColumns[columnId].taskIds = newColumns[columnId].taskIds.filter(id => id !== taskId);
-    
+
     const newTasks = { ...tasks };
     delete newTasks[taskId];
-    
+
     // Update state and save to Firebase
     setColumns(newColumns);
     setTasks(newTasks);
@@ -227,43 +227,47 @@ const Board = () => {
         priority
       }
     };
-    
+
     // Update state and save to Firebase
     setTasks(newTasks);
     saveBoard(columns, newTasks);
   };
 
   if (loading) {
-    return <div className="loading">Loading your Kanban board...</div>;
+    return <div className="loading">Завантажуємо Kanban дошку...</div>;
   }
 
   return (
     <div className="board">
-      <h1>Kanban Board</h1>
+      <h1>Kanban Дошка</h1>
       <div className="board-columns">
-        {Object.values(columns).map(column => (
-          <Column
-            key={column.id}
-            column={column}
-            tasks={column.taskIds.map(taskId => tasks[taskId] || null).filter(Boolean)}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            onAddTaskClick={handleAddTaskClick}
-            onEditTaskClick={handleEditTaskClick}
-            onDeleteTask={handleDeleteTask}
-            onPriorityChange={handlePriorityChange}
-            isAddingTask={addingToColumn === column.id}
-            addTaskText={newTaskText}
-            onAddTaskChange={handleNewTaskChange}
-            onAddTaskSubmit={handleNewTaskSubmit}
-            editingTaskId={editingTaskId}
-            editTaskText={editTaskText}
-            onEditTaskChange={handleEditTaskChange}
-            onEditTaskSubmit={handleEditTaskSubmit}
-          />
-        ))}
+        {columnOrder.map(columnId => {
+          const column = columns[columnId];
+          return column ? (
+            <Column
+              key={column.id}
+              column={column}
+              tasks={column.taskIds.map(taskId => tasks[taskId] || null).filter(Boolean)}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onAddTaskClick={handleAddTaskClick}
+              onEditTaskClick={handleEditTaskClick}
+              onDeleteTask={handleDeleteTask}
+              onPriorityChange={handlePriorityChange}
+              isAddingTask={addingToColumn === column.id}
+              addTaskText={newTaskText}
+              onAddTaskChange={handleNewTaskChange}
+              onAddTaskSubmit={handleNewTaskSubmit}
+              editingTaskId={editingTaskId}
+              editTaskText={editTaskText}
+              onEditTaskChange={handleEditTaskChange}
+              onEditTaskSubmit={handleEditTaskSubmit}
+            />
+          ) : null;
+        })}
       </div>
+
     </div>
   );
 };
