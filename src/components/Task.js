@@ -1,23 +1,60 @@
-import React from "react";
-import { useDraggable } from "@dnd-kit/core";
+// Task.js
+import React from 'react';
+import './Task.css';
 
-export default function Task({ task }) {
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: task.id });
-
+const Task = ({
+  task,
+  onDragStart,
+  onEditClick,
+  onDeleteClick,
+  onPriorityChange,
+  isEditing,
+  editText,
+  onEditChange,
+  onEditSubmit
+}) => {
   return (
     <div
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      style={{
-        padding: "1rem",
-        margin: "0.5rem 0",
-        border: "1px solid gray",
-        backgroundColor: "white",
-        transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined,
-      }}
+      className={`task task-${task.priority}`}
+      draggable
+      onDragStart={onDragStart}
     >
-      {task.content}
+      {isEditing ? (
+        <div className="task-edit-form">
+          <textarea
+            value={editText}
+            onChange={onEditChange}
+            autoFocus
+          />
+          <div className="form-actions">
+            <button onClick={onEditSubmit}>Зберегти</button>
+            <button onClick={() => onEditClick(null)}>Відмінити</button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="task-content">{task.content}</div>
+          <div className="task-actions">
+            <div className="priority-selector">
+              <span>Пріорітет:</span>
+              <select 
+                value={task.priority}
+                onChange={(e) => onPriorityChange(e.target.value)}
+              >
+                <option value="low">Низький</option>
+                <option value="medium">Середній</option>
+                <option value="high">Високий</option>
+              </select>
+            </div>
+            <div className="task-buttons">
+              <button onClick={onEditClick}>Змінити</button>
+              <button onClick={onDeleteClick}>Видалити</button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
-}
+};
+
+export default Task;

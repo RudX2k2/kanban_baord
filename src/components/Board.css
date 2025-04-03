@@ -1,0 +1,13 @@
+.board {
+    padding: 20px;
+  }
+  
+  .board h1 {
+    margin-bottom: 20px;
+    color: #333;
+  }
+  
+  .board-columns {
+    display: flex;
+    gap: 20px;
+  }
