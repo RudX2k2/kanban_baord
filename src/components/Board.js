@@ -1,43 +1,95 @@
-// Board.js
-import React, { useState } from 'react';
+// Board.js (with fixes for tasks moving after refresh)
+import React, { useState, useEffect } from 'react';
 import Column from './Column';
 import './Board.css';
+import { db, doc, getDoc, setDoc, updateDoc } from '../firebase'; // Adjust path as needed
 
 const Board = () => {
-  const [columns, setColumns] = useState({
-    todo: {
-      id: 'todo',
-      title: 'Виконати',
-      taskIds: ['task-1', 'task-2']
-    },
-    inProgress: {
-      id: 'inProgress',
-      title: 'Виконується',
-      taskIds: ['task-3']
-    },
-    inReview: {
-      id: 'review',
-      title: 'Перевіряється',
-      taskIds: ['task-5']
-    },
-    done: {
-      id: 'done',
-      title: 'Виконано',
-      taskIds: ['task-4']
-    }
-  });
-
-  const [tasks, setTasks] = useState({
-    'task-1': { id: 'task-1', content: 'Перевірити backlog', priority: 'high' },
-    'task-2': { id: 'task-2', content: 'Дослідження нової технології', priority: 'medium' },
-    'task-3': { id: 'task-3', content: 'Unit тести', priority: 'medium' },
-    'task-4': { id: 'task-4', content: 'Впровадження нової feature', priority: 'low' }, 
-    'task-5': { id: 'task-5', content: 'Впровадження нової feature 2', priority: 'high' }
-
-  });
-
+  const [columns, setColumns] = useState({});
+  const [tasks, setTasks] = useState({});
+  const [loading, setLoading] = useState(true);
   const [newTaskText, setNewTaskText] = useState('');
   const [addingToColumn, setAddingToColumn] = useState(null);
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [editTaskText, setEditTaskText] = useState('');
+  const [boardId] = useState('main-board'); // You can make this dynamic later
+
+  // Fetch data on load
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Get board data
+        const boardRef = doc(db, "boards", boardId);
+        const boardDoc = await getDoc(boardRef);
+        
+        if (boardDoc.exists()) {
+          const data = boardDoc.data();
+          // Make sure we have both tasks and columns
+          if (data.columns && data.tasks) {
+            setColumns(data.columns);
+            setTasks(data.tasks);
+          } else {
+            // Create default structure if missing
+            await createDefaultBoard(boardRef);
+          }
+        } else {
+          // Create default board on first use
+          await createDefaultBoard(boardRef);
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    // Helper to create default board
+    const createDefaultBoard = async (boardRef) => {
+      const defaultColumns = {
+        todo: {
+          id: 'todo',
+          title: 'To Do',
+          taskIds: []
+        },
+        inProgress: {
+          id: 'inProgress',
+          title: 'In Progress',
+          taskIds: []
+        },
+        done: {
+          id: 'done',
+          title: 'Done',
+          taskIds: []
+        }
+      };
+      
+      await setDoc(boardRef, {
+        columns: defaultColumns,
+        tasks: {}
+      });
+      
+      setColumns(defaultColumns);
+      setTasks({});
+    };
+    
+    fetchData();
+  }, [boardId]);
+
+  // Save board data whenever there's a change
+  // We use a single save function to ensure consistency
+  const saveBoard = async (newColumns, newTasks) => {
+    if (loading) return; // Don't save during initial load
+    
+    try {
+      const boardRef = doc(db, "boards", boardId);
+      await updateDoc(boardRef, {
+        columns: newColumns,
+        tasks: newTasks
+      });
+    } catch (error) {
+      console.error("Error saving board:", error);
+    }
+  };
 
   // Handle dragging tasks between columns
   const handleDragStart = (e, taskId, sourceColumnId) => {
@@ -65,7 +117,9 @@ const Board = () => {
     // Add to target column
     newColumns[targetColumnId].taskIds = [...newColumns[targetColumnId].taskIds, taskId];
     
+    // Update state and save to Firebase in one operation
     setColumns(newColumns);
+    saveBoard(newColumns, tasks);
   };
 
   // Adding new tasks
@@ -89,16 +143,19 @@ const Board = () => {
       priority: 'medium'
     };
 
-    // Add to tasks
-    setTasks({
+    // Create updated copies of state
+    const newTasks = {
       ...tasks,
       [newTaskId]: newTask
-    });
-
-    // Add to column
+    };
+    
     const newColumns = { ...columns };
     newColumns[addingToColumn].taskIds = [...newColumns[addingToColumn].taskIds, newTaskId];
+    
+    // Update state and save to Firebase
+    setTasks(newTasks);
     setColumns(newColumns);
+    saveBoard(newColumns, newTasks);
 
     // Reset form
     setAddingToColumn(null);
@@ -106,9 +163,6 @@ const Board = () => {
   };
 
   // Editing tasks
-  const [editingTaskId, setEditingTaskId] = useState(null);
-  const [editTaskText, setEditTaskText] = useState('');
-
   const handleEditTaskClick = (taskId) => {
     setEditingTaskId(taskId);
     setEditTaskText(tasks[taskId].content);
@@ -121,14 +175,18 @@ const Board = () => {
   const handleEditTaskSubmit = () => {
     if (editTaskText.trim() === '') return;
 
-    // Update task
-    setTasks({
+    // Create updated tasks
+    const newTasks = {
       ...tasks,
       [editingTaskId]: {
         ...tasks[editingTaskId],
         content: editTaskText
       }
-    });
+    };
+
+    // Update state and save to Firebase
+    setTasks(newTasks);
+    saveBoard(columns, newTasks);
 
     // Reset form
     setEditingTaskId(null);
@@ -147,38 +205,47 @@ const Board = () => {
 
     if (!columnId) return;
 
-    // Remove task from column
+    // Create updated copies
     const newColumns = { ...columns };
     newColumns[columnId].taskIds = newColumns[columnId].taskIds.filter(id => id !== taskId);
     
-    // Remove task from tasks
     const newTasks = { ...tasks };
     delete newTasks[taskId];
     
+    // Update state and save to Firebase
     setColumns(newColumns);
     setTasks(newTasks);
+    saveBoard(newColumns, newTasks);
   };
 
   // Update task priority
   const handlePriorityChange = (taskId, priority) => {
-    setTasks({
+    const newTasks = {
       ...tasks,
       [taskId]: {
         ...tasks[taskId],
         priority
       }
-    });
+    };
+    
+    // Update state and save to Firebase
+    setTasks(newTasks);
+    saveBoard(columns, newTasks);
   };
+
+  if (loading) {
+    return <div className="loading">Loading your Kanban board...</div>;
+  }
 
   return (
     <div className="board">
-      <h1>Kanban дошка</h1>
+      <h1>Kanban Board</h1>
       <div className="board-columns">
         {Object.values(columns).map(column => (
           <Column
             key={column.id}
             column={column}
-            tasks={column.taskIds.map(taskId => tasks[taskId])}
+            tasks={column.taskIds.map(taskId => tasks[taskId] || null).filter(Boolean)}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
